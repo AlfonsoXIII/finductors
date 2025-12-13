@@ -3,9 +3,28 @@ module math_library
     implicit none
     
     private
-    public hammersley2d_sequence, hsa_quicksort
+    public hammersley2d_sequence, hsa_quicksort, cmmp
 
 contains
+
+    ! MATRIX ARITHMETIC
+
+    pure subroutine cmmp(a, b)
+        complex(dp), intent(inout) :: a(4)
+        complex(dp), intent(in) :: b(4)
+    
+        complex(dp) :: c11, c12, c21, c22
+
+        c11 = a(1)*b(1) + a(2)*b(3)
+        c12 = a(1)*b(2) + a(2)*b(4)
+        c21 = a(3)*b(1) + a(4)*b(3)
+        c22 = a(3)*b(2) + a(4)*b(4)
+
+        a(1) = c11
+        a(2) = c12
+        a(3) = c21
+        a(4) = c22
+    end subroutine
     
     ! HAMMERSLEY SEQUENCE
 
@@ -76,7 +95,7 @@ contains
             if (idx <= jdx) then
                 harmonic_buffer = harmonics(idx)
                 harmonics(idx) = harmonics(jdx)
-                harmonics(idj) = harmonic_buffer
+                harmonics(jdx) = harmonic_buffer
 
                 source_buffer = sources(idx)
                 sources(idx) = sources(jdx)

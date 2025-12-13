@@ -10,9 +10,14 @@ module inductor_solvers
     public :: port_t, solver
 
     type :: port_t
+        integer :: n_components
         class(inductor_t), allocatable :: inductor
         class(component_t), allocatable :: load
         class(component_t), allocatable :: components(:)
+    contains
+        procedure :: add_component => port_add_component
+        procedure :: add_load => port_add_load
+        procedure :: add_inductor => port_add_inductor
     end type port_t
 
     type :: solver
@@ -30,11 +35,13 @@ module inductor_solvers
         procedure :: set_samples => solver_set_samples
         procedure :: add_port => solver_add_port
         procedure :: run => solver_run
-        procedure :: compute_inductances => solver_compute_inductances
+        procedure :: solve_inductances => solver_compute_inductances
         procedure :: get_inductances => solver_get_inductances
+        !procedure :: get_harmonics => solver_get_harmonics
         !procedure :: get_currents => solver_get_currents
-        !procedure(solver_get_efield) :: get_efield
-        !procedure(solver_get_bfield) :: get_bfield
+        !procedure :: get_efield => solver_get_efield
+        !procedure :: get_bfield => solver_get_bfield
+        !procedure :: get_power_distribution => solver_get_power_distribution
 
         procedure, private :: mutual_inductance => solve_mutual_inductance
         procedure, private :: inductance => solve_inductance
@@ -42,6 +49,27 @@ module inductor_solvers
     end type solver
 
 contains
+
+subroutine port_add_component(self, new_component)
+    class(port_t), intent(inout) :: self
+    class(component_t), intent(in) :: new_component
+
+
+end subroutine
+
+subroutine port_add_load(self, new_load)
+    class(port_t), intent(inout) :: self
+    class(component_t), intent(in) :: new_load
+
+
+end subroutine
+
+subroutine port_add_inductor(self, new_inductor)
+    class(port_t), intent(inout) :: self
+    class(inductor_t), intent(in) :: new_inductor
+
+
+end subroutine
 
 subroutine solver_init(self)
     class(solver), intent(inout) :: self
@@ -65,7 +93,7 @@ end subroutine
 subroutine solver_kill(self)
     class(solver), intent(inout) :: self
     
-    deallocate(self%ports, self%v_vector, self%z_matrix)
+    deallocate(self%ports, self%v_vector)
     deallocate(self%harmonics, self%samples, self%inductances)
 end subroutine
 
@@ -99,14 +127,22 @@ end subroutine
 subroutine solver_run(self)
     class(solver), intent(inout) :: self
     
+    integer :: idx, jdx, ref, counter
+    integer, allocatable :: sources_buff(:), ipiv(:)
     real(dp) :: harmonic_buff
     real(dp), allocatable :: harmonics_buff(:)
-    complex(dp), allocatable :: complex_buff(:)
+    complex(dp) :: z_buff(4), z_buff_aux(4)
+    complex(dp), allocatable :: amplitudes_buff(:), z_matrix(:,:)
 
-    integer :: idx, counter
-    integer, allocatable :: sources_buff(:)
 
-    ! harmonics fetching
+    ! INDUCTANCES INITIAL CHECK
+
+    if (size(self%inductances) /= self%n_ports*self%n_ports) then
+        print *, "Recalculating Inductances..."
+        call self%solve_inductances()
+    end if
+
+    ! HARMONICS FETCHING
     
     counter = 0
     do idx=1,self%n_ports
@@ -117,45 +153,110 @@ subroutine solver_run(self)
     end do
 
     if (counter == 0) then
-        print *, "No sources configured!"
+        print *, "No Sources Configured! Aborting..."
         return
     end if
     
-    allocate(sources_buff(counter), harmonics_buff(counter), complex_buff(counter))
+    allocate(sources_buff(counter), harmonics_buff(counter), amplitudes_buff(counter))
 
+    ref = 0
     do idx=1,self%n_ports
         select type(src => self%ports(idx)%load)
             class is (source_t)
-
+                !$omp simd aligned(sources_buff, harmonics_buff, amplitudes_buff:64)
+                do jdx=1,src%n_harmonics
+                    sources_buff(jdx+ref) = idx
+                    harmonics_buff(jdx+ref) = src%harmonics(jdx)%frequency
+                    amplitudes_buff(jdx+ref) = src%harmonics(jdx)%amplitude
+                end do
+                ref = ref + src%n_harmonics
         end select
     end do
 
-    call hsa_quicksort(counter, harmonics_buff, sources_buff, complex_buff, 1, counter)
+    call hsa_quicksort(counter, harmonics_buff, sources_buff, amplitudes_buff, 1, counter)
 
-    ! grouping
+    ! HARMONICS GROUPING & DENORMALIZED EXCITATION VECTOR ASSEMBLY
     
     self%n_harmonics = 1
     harmonic_buff = harmonics_buff(1)
 
     do idx=1,counter
-        if (harmonics_buff(idx) /= harmonic_buff)
-            self%n_harmonics = counter_group + 1
+        if (harmonics_buff(idx) /= harmonic_buff) then
+            self%n_harmonics = self%n_harmonics + 1
             harmonic_buff = harmonics_buff(idx)
         end if
     end do
 
-    allocate(self%harmonics(self%n_harmonics))
+    deallocate(self%v_vector)
+    allocate(self%v_vector(self%n_ports,self%n_harmonics), self%harmonics(self%n_harmonics))
+    
+    self%v_vector = CZERO
 
-    harmonic_buff = harmonics_buff(1)
+    ref = 0
+    harmonic_buff = -1
     do idx=1,counter
-        if (harmonics_buff(idx) /= harmonic_buff)
+        
+        if (harmonics_buff(idx) /= harmonic_buff) then
+            ref = ref + 1
             harmonic_buff = harmonics_buff(idx)
+            self%harmonics(ref) = harmonic_buff
         end if
+        
+        self%v_vector(sources_buff(idx),ref) = amplitudes_buff(idx)
+
+    end do
+    
+    ! SIMULATION SWEEP
+    
+    !$omp parallel do schedule(static) default(shared) private(idx, jdx, z_matrix, z_buff, z_buff_aux)
+    do idx=1,self%n_harmonics
+        
+        ! impedance matrix assembly
+        
+        allocate(ipiv(self%n_ports))
+        allocate(z_matrix(self%n_ports,self%n_ports)) 
+
+        z_matrix = self%inductances * CJ * 2.0_dp * PI * self%harmonics(idx)
+        
+        do jdx=1,self%n_ports
+            
+            z_buff = (/CONE, CZERO, CONE, CZERO/)
+            
+            ! source / load
+
+            call self%ports(jdx)%load%get_abcd(self%temperature, self%harmonics(idx), z_buff_aux)
+            call cmmp(z_buff, z_buff_aux)
+            
+            ! components
+
+            do ref=1,self%ports(jdx)%n_components
+                call self%ports(jdx)%components(ref)%get_abcd(self%temperature, self%harmonics(idx), z_buff_aux)
+                call cmmp(z_buff, z_buff_aux)
+            end do
+
+            ! voltage normalization
+
+            self%v_vector(jdx,idx) = self%v_vector(jdx,idx) / z_buff(1)
+
+            ! series impedance
+
+            z_matrix(jdx,jdx) = z_matrix(jdx,jdx) + z_buff(2) / z_buff(1)
+
+        end do
+
+        ! linear system solving ( lapack call )
+
+        call zgesv(self%n_ports, 1, z_matrix, self%n_ports, ipiv, self%v_vector(:,idx), self%n_ports, ref)
+        
+        if (ref /= 0) then
+            print *, "Matrix Inversion Failed: Singular Matrix!"
+        end if 
+
+        deallocate(ipiv, z_matrix)
 
     end do
 
-    ! simulation sweep
-
+    deallocate(harmonics_buff, sources_buff, amplitudes_buff)
 end subroutine
 
 !subroutine solver_get_currents(self, i_vector)
