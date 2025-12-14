@@ -49,10 +49,10 @@ module inductor_solvers
         procedure :: solve_inductances => solver_compute_inductances
         procedure :: get_inductances => solver_get_inductances
         procedure :: get_currents => solver_get_currents
-        !procedure :: get_harmonics => solver_get_harmonics
+        procedure :: get_harmonics => solver_get_harmonics
+        procedure :: get_bfield => solver_get_bfield
+        procedure :: get_power_distribution => solver_get_power_distribution
         !procedure :: get_efield => solver_get_efield
-        !procedure :: get_bfield => solver_get_bfield
-        !procedure :: get_power_distribution => solver_get_power_distribution
 
         procedure, private :: mutual_inductance => solve_mutual_inductance
         procedure, private :: inductance => solve_inductance
@@ -311,6 +311,68 @@ subroutine solver_get_currents(self, currents)
             currents(idx,jdx) = self%v_vector(idx,jdx)
         end do
     end do
+end subroutine
+
+subroutine solver_get_harmonics(self, harmonics)
+    class(solver), intent(inout) :: self
+    complex(dp), intent(out) :: harmonics(self%n_harmonics)
+    
+    integer :: jdx
+    
+    !$omp simd 
+    do jdx=1,self%n_harmonics
+        harmonics(jdx) = self%harmonics(jdx)
+    end do
+end subroutine
+
+subroutine solver_get_bfield(self, n_points, xyz, bfield)
+    class(solver), intent(inout) :: self
+    integer, intent(in) :: n_points
+    real(dp), intent(in) :: xyz(3,n_points)
+    complex(dp), intent(out) :: bfield(3,n_points,self%n_harmonics)
+
+    integer :: hdx, idx, jdx, kdx
+    real(dp) :: r_vec(3,1), dl_vec(3,1), limits(2), theta(1), step, dist
+    complex(dp) :: factor
+
+    bfield = CZERO
+    
+    do hdx=1,self%n_harmonics
+        do jdx=1,self%n_ports
+            do idx=1,n_points
+                
+                if (abs(self%v_vector(jdx,hdx)) < 1.0e-12_dp) cycle
+                call self%ports(jdx)%ptr%inductor%ptr%get_limits(limits)
+
+                step = (limits(2)-limits(1)) / real(self%n_samples, kind=dp)
+                do kdx=1,self%n_samples
+                    
+                    theta(1) = limits(1) + (kdx-0.5_dp) * step
+
+                    call self%ports(jdx)%ptr%inductor%ptr%get_r(1,theta,r_vec)
+                    r_vec(:,1) = xyz(:,idx) - r_vec(:,1)
+                    
+                    dist = r_vec(1,1)**2 + r_vec(2,1)**2 + r_vec(3,1)**2
+                    if (dist < 1.0e-12_dp) cycle
+                    dist = 1.0_dp / (sqrt(dist)**3)
+
+                    call self%ports(jdx)%ptr%inductor%ptr%get_dl(1,theta,dl_vec)
+                    
+                    factor = (1.0E-7_dp*dist*self%v_vector(jdx,hdx)) * step
+
+                    bfield(1,idx,hdx) = bfield(1,idx,hdx) + factor * (dl_vec(2,1)*r_vec(3,1)-dl_vec(3,1)*r_vec(2,1))
+                    bfield(2,idx,hdx) = bfield(2,idx,hdx) + factor * (dl_vec(3,1)*r_vec(1,1)-dl_vec(1,1)*r_vec(3,1)) 
+                    bfield(3,idx,hdx) = bfield(3,idx,hdx) + factor * (dl_vec(1,1)*r_vec(2,1)-dl_vec(2,1)*r_vec(1,1))
+                end do 
+            end do
+        end do
+    end do
+end subroutine
+
+subroutine solver_get_power_distribution(self, power_distribution)
+    class(solver), intent(inout) :: self
+    real(dp), intent(out) :: power_distribution(2,self%n_ports)
+
 end subroutine
 
 subroutine solver_compute_inductances(self)

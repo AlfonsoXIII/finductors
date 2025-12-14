@@ -1,6 +1,8 @@
 program circular_inductors
     
     use hdf5
+    
+    use utils_library
 
     use materials_library
     use sources_library
@@ -18,9 +20,10 @@ program circular_inductors
     type(sresistor) :: resistive_load
     type(circularcs_rldowell_inductor) :: inductor1, inductor2
 
+    integer, parameter :: npoints = 200
     integer :: unit, i, j
-    real(dp) :: inductances(2,2)
-    complex(dp) :: currents(2,1)
+    real(dp) :: inductances(2,2), xyz(3,npoints**2) 
+    complex(dp) :: currents(2,1), bfield(3,npoints**2,1)
 
     ! source configuration
 
@@ -92,6 +95,22 @@ program circular_inductors
 
     do i=1,2
         write(unit,'(I3,",",ES12.5,",",ES12.5)') i, real(currents(i,1), kind=dp), aimag(currents(i,1))
+    end do
+
+    close(unit)
+    
+    call generate_xzmesh(npoints, -20E-2_dp, 20E-2_dp, -10E-2_dp, 10E-2_dp, 0.0_dp, xyz)
+    call solver1%get_bfield(npoints*npoints, xyz, bfield)
+
+    open(newunit=unit, file="bfield.csv", status='replace', action='write', iostat=i)
+    if (i /= 0) then
+        print *, "Error abriendo archivo"
+        stop
+    end if
+
+    do i=1,npoints*npoints
+        write(unit,'(ES12.5,",",ES12.5,",",ES12.5,",",ES12.5,",",ES12.5,",",ES12.5)') xyz(1,i), xyz(2,i), &
+            & xyz(3,i), abs(bfield(1,i,1)), abs(bfield(2,i,1)), abs(bfield(3,i,1))
     end do
 
     close(unit)
