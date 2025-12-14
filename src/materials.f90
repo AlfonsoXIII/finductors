@@ -29,61 +29,61 @@ module materials_library
 
     ! MATERIALS
 
-    type, extends(material_t) :: Cu
+    type, extends(material_t) :: Cu_Material
     contains
         procedure :: get_rho => cu_get_rho
         procedure :: get_mu => cu_get_mu
-    end type Cu
+    end type
 
-    type, extends(material_t) :: Cu_ETP
+    type, extends(material_t) :: Cu_ETP_Material
     contains
         procedure :: get_rho => cu_etp_get_rho
         procedure :: get_mu => cu_etp_get_mu
-    end type Cu_ETP
+    end type
 
-    type, extends(material_t) :: Cu_OF
+    type, extends(material_t) :: Cu_OF_Material
     contains
         procedure :: get_rho => cu_of_get_rho
         procedure :: get_mu => cu_of_get_mu
-    end type Cu_OF
+    end type
 
-    type, extends(material_t) :: Ag
+    type, extends(material_t) :: Ag_Material
     contains
         procedure :: get_rho => ag_get_rho
         procedure :: get_mu => ag_get_mu
-    end type Ag
+    end type
 
-    type, extends(material_t) :: Ag_6061
+    type, extends(material_t) :: Ag_6061_Material
     contains
         procedure :: get_rho => ag_6061_get_rho
         procedure :: get_mu => ag_6061_get_mu
-    end type Ag_6061
+    end type
 
-    type, extends(material_t) :: Ag_1350
+    type, extends(material_t) :: Ag_1350_Material
     contains
         procedure :: get_rho => ag_1350_get_rho
         procedure :: get_mu => ag_1350_get_mu
-    end type Ag_1350
+    end type
 
-    type, extends(material_t) :: Au
+    type, extends(material_t) :: Au_Material
     contains
         procedure :: get_rho => au_get_rho
         procedure :: get_mu => au_get_mu
-    end type Au
+    end type
 
 contains
 
     ! PURE Cu
 
     subroutine cu_get_rho(self, f, t, rho)
-        class(Cu), intent(in) :: self
+        class(Cu_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 1.68E-8_dp * (1.0_dp + 0.00404_dp * (t - 20.0_dp))
     end subroutine cu_get_rho
 
     subroutine cu_get_mu(self, f, t, mu)
-        class(Cu), intent(in) :: self
+        class(Cu_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp
@@ -92,14 +92,14 @@ contains
     ! Annealed Cu
 
     subroutine cu_etp_get_rho(self, f, t, rho)
-        class(Cu_ETP), intent(in) :: self
+        class(Cu_ETP_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 1.72E-8_dp * (1.0_dp + 0.00393_dp * (t - 20.0_dp))
     end subroutine
 
     subroutine cu_etp_get_mu(self, f, t, mu)
-        class(Cu_ETP), intent(in) :: self
+        class(Cu_ETP_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp 
@@ -108,14 +108,14 @@ contains
     ! Oxygen Free Cu
 
     subroutine cu_of_get_rho(self, f, t, rho)
-        class(Cu_OF), intent(in) :: self
+        class(Cu_OF_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 1.707E-8_dp * (1.0_dp + 0.00400_dp * (t - 20.0_dp))
     end subroutine
 
     subroutine cu_of_get_mu(self, f, t, mu)
-        class(Cu_OF), intent(in) :: self
+        class(Cu_OF_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp 
@@ -124,14 +124,14 @@ contains
     ! PURE Ag
 
     subroutine ag_get_rho(self, f, t, rho)
-        class(Ag), intent(in) :: self
+        class(Ag_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 1.59E-8_dp * (1.0_dp + 0.0038_dp * (t - 20.0_dp))
     end subroutine
 
     subroutine ag_get_mu(self, f, t, mu)
-        class(Ag), intent(in) :: self
+        class(Ag_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp 
@@ -140,14 +140,14 @@ contains
     ! Ag 1350
 
     subroutine ag_1350_get_rho(self, f, t, rho)
-        class(Ag_1350), intent(in) :: self
+        class(Ag_1350_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 2.82E-8_dp * (1.0_dp + 0.00403_dp * (t - 20.0_dp))
     end subroutine
 
     subroutine ag_1350_get_mu(self, f, t, mu)
-        class(Ag_1350), intent(in) :: self
+        class(Ag_1350_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp 
@@ -156,14 +156,14 @@ contains
     ! Ag 6061
 
     subroutine ag_6061_get_rho(self, f, t, rho)
-        class(Ag_6061), intent(in) :: self
+        class(Ag_6061_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 4.00E-8_dp * (1.0_dp + 0.0038_dp * (t - 20.0_dp))
     end subroutine
 
     subroutine ag_6061_get_mu(self, f, t, mu)
-        class(Ag_6061), intent(in) :: self
+        class(Ag_6061_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp 
@@ -172,14 +172,14 @@ contains
     ! PURE Au
 
     subroutine au_get_rho(self, f, t, rho)
-        class(Au), intent(in) :: self
+        class(Au_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: rho
         rho = 2.44E-8_dp * (1.0_dp + 0.0034_dp * (t - 20.0_dp))
     end subroutine
 
     subroutine au_get_mu(self, f, t, mu)
-        class(Au), intent(in) :: self
+        class(Au_Material), intent(in) :: self
         real(dp), intent(in) :: f, t
         real(dp), intent(out) :: mu
         mu = 1.0_dp 

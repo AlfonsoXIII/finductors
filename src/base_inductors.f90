@@ -5,7 +5,7 @@ module base_inductors_library
 
     type, abstract :: inductor_t
         real(dp) :: center(3), normal(3)
-        class(material_t), allocatable :: material
+        class(material_t), pointer :: material
     contains
         procedure(r_sub), deferred :: get_r
         procedure(dl_sub), deferred :: get_dl
